@@ -2,7 +2,6 @@ import os
 import django
 from datetime import date
 from decimal import Decimal
-
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "bookstore_project.settings")
 django.setup()
 
