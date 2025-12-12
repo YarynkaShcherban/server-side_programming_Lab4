@@ -16,6 +16,7 @@ import pandas as pd
 from plotly.offline import plot
 import plotly.express as px
 from store.repositories.StatsRepo import StatsRepo
+from django.core.paginator import Paginator
 
 
 book_repo = BookRepo()
@@ -27,9 +28,12 @@ def book_list(request):
     try:
         books = book_api.get_all_books()
         genres = genre_api.get_all_genres()
-
+        paginator = Paginator(books, 8)
+        page_number = request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
         context = {
-            "books": books,
+            "page_obj": page_obj,
+            "books": page_obj.object_list,
             "genres": genres,
             "current_genre": None
         }
@@ -46,9 +50,15 @@ def book_list_by_genre(request, genre_id):
         if not current_genre:
             return render(request, "errors/404.html", status=404)
         books = book_api.get_books_by_genre(genre_id)
+
+        paginator = Paginator(books, 8) 
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
         genres = genre_api.get_all_genres()
         return render(request, 'catalog/list.html', {
-            'books': books,
+            'books': page_obj.object_list, 
+            'page_obj': page_obj, 
             'genres': genres,
             'current_genre': current_genre
         })
@@ -65,10 +75,16 @@ def book_list_by_publisher(request, publisher_id):
             return render(request, "errors/404.html", status=404)
 
         books = book_api.get_books_by_publisher(publisher_id)
+
+        paginator = Paginator(books, 8) 
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
         publishers = publisher_api.get_all_publishers()
 
         return render(request, 'catalog/list.html', {
-            'books': books,
+            'books': page_obj.object_list, 
+            'page_obj': page_obj, 
             'publishers': publishers,
             'current_publisher': current_publisher
         })
@@ -136,7 +152,7 @@ def book_detail(request, book_id):
         print("Помилка detail:", ex)
         return render(request, "errors/400.html", status=400)
 
-#не працює через api
+
 def book_update(request, book_id):
     try:
         book = book_repo.get_by_id(book_id)
@@ -201,26 +217,135 @@ def book_delete(request, book_id):
         return render(request, "errors/500.html", status=500)
 
 
-
 def get_dashboard_figures():
+    template_style = 'plotly_white'
+    line_chart_layout_updates = {
+        'xaxis': {
+            'gridcolor': '#e0e0e0', 'griddash': 'dash'
+        },
+        'yaxis': {
+            'gridcolor': '#e0e0e0', 'griddash': 'dash'
+        },
+        'plot_bgcolor': 'white'
+    }
+    # --- 1. Статистика по жанрах ---
+    genres_data = list(StatsRepo.genres_with_books_and_avg_price())
+    genres_df = pd.DataFrame(genres_data, columns=[
+                             'name', 'num_books', 'avg_price'] if genres_data else [])
 
-    genres_df = pd.DataFrame(list(StatsRepo.genres_with_books_and_avg_price()))
-    fig_genres_count = px.bar(genres_df, x='name', y='num_books', title="Кількість книг по жанрах") if not genres_df.empty else None
-    fig_genres_price = px.line(genres_df, x='name', y='avg_price', title="Середня ціна книг по жанрах") if not genres_df.empty else None
+    fig_genres_count, fig_genres_price = None, None
+    if not genres_df.empty:
+        # Графік 1: Кількість книг по жанрах (сортування за кількістю)
+        genres_count_df = genres_df.sort_values('num_books', ascending=False)
+        fig_genres_count = px.bar(genres_count_df, x='name', y='num_books',
+                                  title="Кількість книг по жанрах",
+                                  labels={'name': 'Жанр',
+                                          'num_books': 'Кількість книг'},
+                                  template=template_style)
+        fig_genres_count.update_traces(marker_color='#8ECAE6')
 
-    authors_df = pd.DataFrame(list(StatsRepo.authors_avg_book_price()))
-    fig_authors_price = px.bar(authors_df, x='last_name', y='avg_price', title="Середня ціна книг по авторах") if not authors_df.empty else None
-    top_authors_df = pd.DataFrame(list(StatsRepo.top_authors_by_book_count()))
-    fig_top_authors = px.bar(top_authors_df, x='last_name', y='num_books', title="Топ авторів за кількістю книг") if not top_authors_df.empty else None
+        # Графік 2: Середня ціна книг по жанрах (сортування за ціною)
+        genres_price_df = genres_df.sort_values('avg_price', ascending=False)
+        fig_genres_price = px.line(genres_price_df, x='name', y='avg_price',
+                                   title="Середня ціна книг по жанрах",
+                                   labels={'name': 'Жанр',
+                                           'avg_price': 'Середня ціна, грн'},
+                                   template=template_style, markers=True)
+        fig_genres_price.update_layout(line_chart_layout_updates)
+    # --- 2. Статистика по авторах ---
+    authors_data = list(StatsRepo.authors_avg_book_price())
+    authors_df = pd.DataFrame(authors_data, columns=[
+                              'first_name', 'last_name', 'avg_price'] if authors_data else [])
 
-    publishers_df = pd.DataFrame(list(StatsRepo.publishers_avg_price()))
-    fig_publishers_price = px.bar(publishers_df, x='name', y='avg_price', title="Середня ціна книг по видавництвах") if not publishers_df.empty else None
-    expensive_pub_df = pd.DataFrame(list(StatsRepo.expensive_publishers()))
-    fig_expensive_pub = px.pie(expensive_pub_df, names='name', values='avg_price', title="Дорогі видавництва") if not expensive_pub_df.empty else None
+    fig_authors_price = None
+    if not authors_df.empty:
+        # Графік 3: Середня ціна книг по авторах (сортування за ціною)
+        authors_price_df = authors_df.sort_values('avg_price', ascending=False)
+        authors_price_df['full_name'] = authors_price_df['first_name'] + \
+            ' ' + authors_price_df['last_name']
+        fig_authors_price = px.bar(authors_price_df, x='full_name', y='avg_price',
+                                   title="Середня ціна книг по авторах",
+                                   labels={'full_name': 'Автор',
+                                           'avg_price': 'Середня ціна, грн'},
+                                   template=template_style,
+                                   hover_data={'avg_price': ':.2f'})
+    fig_authors_price.update_traces(marker_color='#e9c46a')
 
-    stores_df = pd.DataFrame(list(StatsRepo.store_sales_stats()))
-    fig_store_sales = px.bar(stores_df, x='name', y='total_sales', title="Сума продажів по магазинах") if not stores_df.empty else None
-    fig_store_count = px.bar(stores_df, x='name', y='total_purchases', title="Кількість продажів по магазинах") if not stores_df.empty else None
+    top_authors_data = list(StatsRepo.top_authors_by_book_count())
+    top_authors_df = pd.DataFrame(top_authors_data, columns=[
+                                  'first_name', 'last_name', 'num_books'] if top_authors_data else [])
+    custom_colors = ['#22577a', '#38a3a5', '#57cc99', '#80ed99', '#c7f9cc']
+    fig_top_authors = None
+    if not top_authors_df.empty:
+        # Графік 4: Топ авторів за кількістю книг
+        top_authors_df['full_name'] = top_authors_df['first_name'] + \
+            ' ' + top_authors_df['last_name']
+        fig_top_authors = px.pie(top_authors_df,
+                                 values='num_books',
+                                 names='full_name',
+                                 title=f"Топ {len(top_authors_df)} авторів за кількістю книг",
+                                 template=template_style,
+                                 color_discrete_sequence=custom_colors[:len(
+                                     top_authors_df)],
+                                 hole=0.3)
+
+    # --- 3. Статистика по видавництвах ---
+    publishers_data = list(StatsRepo.publishers_avg_price())
+    publishers_df = pd.DataFrame(publishers_data, columns=[
+                                 'name', 'num_books', 'avg_price'] if publishers_data else [])
+
+    fig_publishers_price, fig_expensive_pub = None, None
+    if not publishers_df.empty:
+        # Графік 5: Середня ціна книг по видавництвах (сортування за ціною)
+        publishers_price_df = publishers_df.sort_values(
+            'avg_price', ascending=False)
+        fig_publishers_price = px.bar(publishers_price_df, x='name', y='avg_price',
+                                      title="Середня ціна книг по видавництвах",
+                                      labels={'name': 'Видавництво',
+                                              'avg_price': 'Середня ціна, грн'},
+                                      template=template_style,
+                                      hover_data={'avg_price': ':.2f'})
+        fig_publishers_price.update_traces(marker_color='#2a9d8f')
+
+    expensive_pub_data = list(StatsRepo.expensive_publishers())
+    expensive_pub_df = pd.DataFrame(expensive_pub_data, columns=[
+                                    'name', 'avg_price'] if expensive_pub_data else [])
+
+    if not expensive_pub_df.empty:
+        # Графік 6: Дорогі видавництва (використовуємо поріг з StatsRepo)
+
+        fig_expensive_pub = px.pie(expensive_pub_df, names='name', values='avg_price',
+                                   title="Дорогі видавництва (розподіл за середньою ціною)",
+                                   template=template_style,
+                                   hole=0.3)  # Створюємо пончик-графік
+
+    # --- 4. Статистика продажів по магазинах ---
+    stores_data = list(StatsRepo.store_sales_stats())
+    stores_df = pd.DataFrame(stores_data, columns=[
+                             'name', 'total_sales', 'total_purchases'] if stores_data else [])
+
+    fig_store_sales, fig_store_count = None, None
+    if not stores_df.empty:
+        # Графік 7: Сума продажів по магазинах (сортування за сумою)
+        stores_sales_df = stores_df.sort_values('total_sales', ascending=False)
+        fig_store_sales = px.bar(stores_sales_df, x='name', y='total_sales',
+                                 title="Сума продажів по магазинах",
+                                 labels={'name': 'Магазин',
+                                         'total_sales': 'Сума продажів, грн'},
+                                 template=template_style,
+                                 color='total_sales',
+                                 color_continuous_scale=px.colors.sequential.Viridis)
+
+        # Графік 8: Кількість продажів по магазинах (сортування за кількістю)
+        stores_count_df = stores_df.sort_values(
+            'total_purchases', ascending=False)
+        fig_store_count = px.bar(stores_count_df, x='name', y='total_purchases',
+                                 title="Кількість продажів по магазинах",
+                                 labels={'name': 'Магазин',
+                                         'total_purchases': 'Кількість продажів'},
+                                 template=template_style,
+                                 color='total_purchases',
+                                 color_continuous_scale=px.colors.sequential.Cividis)
 
     return {
         'fig_genres_count': plot(fig_genres_count, output_type='div') if fig_genres_count else "<p>Немає даних</p>",

@@ -30,7 +30,7 @@ class StatsRepo:
         ).order_by('-num_books')[:limit].values('first_name', 'last_name', 'num_books')
 
     @staticmethod
-    def expensive_publishers(threshold=50):
+    def expensive_publishers(threshold=10):
         return Publisher.objects.annotate(
             avg_price=Avg('books__price')
         ).filter(avg_price__gt=threshold).values('name', 'avg_price')

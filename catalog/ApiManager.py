@@ -63,14 +63,6 @@ class BookApiManager:
     def get_by_id(self, book_id: int):
         return self.client.get(f"books/{book_id}/")
     
-    # def create(self, data: Dict[str, Any], image_file=None):
-    #     files = {"image": image_file} if image_file else None
-    #     return self.client.post("books/", data=data, files=files)
-
-    # def update(self, book_id: int, data: Dict[str, Any], image_file=None):
-    #     files = {"image": image_file} if image_file else None
-    #     return self.client.put(f"books/{book_id}/", data=data, files=files)
-    
     def create(self, data: Dict[str, Any], image_file=None):
         files = None
         if image_file:
@@ -80,14 +72,14 @@ class BookApiManager:
             }
         return self.client.post("books/", data=data, files=files)
 
-    def update(self, book_id: int, data: Dict[str, Any], image_file=None):
-        files = None
-        if image_file:
-            image_file.seek(0)
-            files = {
-                "image": (image_file.name, image_file.read(), image_file.content_type)
-            }
-        return self.client.put(f"books/{book_id}/", data=data, files=files)
+    # def update(self, book_id: int, data: Dict[str, Any], image_file=None):
+    #     files = None
+    #     if image_file:
+    #         image_file.seek(0)
+    #         files = {
+    #             "image": (image_file.name, image_file.read(), image_file.content_type)
+    #         }
+    #     return self.client.put(f"books/{book_id}/", data=data, files=files)
 
     def delete(self, book_id: int):
         response = self.client.delete(f"books/{book_id}/")
