@@ -16,7 +16,7 @@ import pandas as pd
 from plotly.offline import plot
 import plotly.express as px
 from store.repositories.StatsRepo import StatsRepo
-
+from django.core.paginator import Paginator
 
 book_repo = BookRepo()
 genre_repo = GenreRepo()
@@ -224,7 +224,7 @@ def get_dashboard_figures():
         # Графік 1: Кількість книг по жанрах (сортування за кількістю)
         genres_count_df = genres_df.sort_values('num_books', ascending=False)
         fig_genres_count = px.bar(genres_count_df, x='name', y='num_books',
-                                  title="Кількість книг по жанрах",
+
                                   labels={'name': 'Жанр',
                                           'num_books': 'Кількість книг'},
                                   template=template_style)
@@ -233,7 +233,7 @@ def get_dashboard_figures():
         # Графік 2: Середня ціна книг по жанрах (сортування за ціною)
         genres_price_df = genres_df.sort_values('avg_price', ascending=False)
         fig_genres_price = px.line(genres_price_df, x='name', y='avg_price',
-                                   title="Середня ціна книг по жанрах",
+
                                    labels={'name': 'Жанр',
                                            'avg_price': 'Середня ціна, грн'},
                                    template=template_style, markers=True)
@@ -249,21 +249,24 @@ def get_dashboard_figures():
         authors_price_df = authors_df.sort_values('avg_price', ascending=False)
         authors_price_df['full_name'] = authors_price_df['first_name'] + \
             ' ' + authors_price_df['last_name']
-        fig_authors_price = px.bar(authors_price_df, x='full_name', y='avg_price',
-                                   title="Середня ціна книг по авторах",
-                                   labels={'full_name': 'Автор',
-                                           'avg_price': 'Середня ціна, грн'},
-                                   template=template_style,
-                                   hover_data={'avg_price': ':.2f'})
-    fig_authors_price.update_traces(marker_color='#e9c46a')
+        fig_authors_price = px.line(authors_price_df, x='full_name', y='avg_price',
 
+                                    labels={'full_name': 'Автор',
+                                            'avg_price': 'Середня ціна, грн'},
+                                    template=template_style,
+                                    markers=True)
+        fig_authors_price.update_layout(line_chart_layout_updates)
+        fig_authors_price.update_traces(line_color='#f4a259')
+        fig_authors_price.update_layout(xaxis={'tickangle': 45})
+
+        # Графік 4: Топ авторів за кількістю книг
     top_authors_data = list(StatsRepo.top_authors_by_book_count())
     top_authors_df = pd.DataFrame(top_authors_data, columns=[
                                   'first_name', 'last_name', 'num_books'] if top_authors_data else [])
     custom_colors = ['#22577a', '#38a3a5', '#57cc99', '#80ed99', '#c7f9cc']
     fig_top_authors = None
     if not top_authors_df.empty:
-        # Графік 4: Топ авторів за кількістю книг
+
         top_authors_df['full_name'] = top_authors_df['first_name'] + \
             ' ' + top_authors_df['last_name']
         fig_top_authors = px.pie(top_authors_df,
@@ -285,25 +288,31 @@ def get_dashboard_figures():
         # Графік 5: Середня ціна книг по видавництвах (сортування за ціною)
         publishers_price_df = publishers_df.sort_values(
             'avg_price', ascending=False)
-        fig_publishers_price = px.bar(publishers_price_df, x='name', y='avg_price',
-                                      title="Середня ціна книг по видавництвах",
-                                      labels={'name': 'Видавництво',
-                                              'avg_price': 'Середня ціна, грн'},
-                                      template=template_style,
-                                      hover_data={'avg_price': ':.2f'})
-        fig_publishers_price.update_traces(marker_color='#2a9d8f')
+        fig_publishers_price = px.line(publishers_price_df, x='name', y='avg_price',
+                                       labels={'name': 'Видавництво',
+                                               'avg_price': 'Середня ціна, грн'},
+                                       template=template_style,
+                                       markers=True)
+        fig_publishers_price.update_layout(
+            line_chart_layout_updates)
+        fig_publishers_price.update_traces(line_color='#2a9d8f')
+        fig_publishers_price.update_layout(xaxis={'tickangle': 20})
 
+        # Графік 6: Дорогі видавництва
+    custom_colors_1 = ['#0d47a1', '#1565c0', '#1976d2', '#1e88e5', '#2196f3',
+                       '#42a5f5', '#64b5f6', '#90caf9', '#bbdefb', '#e3f2fd']
     expensive_pub_data = list(StatsRepo.expensive_publishers())
     expensive_pub_df = pd.DataFrame(expensive_pub_data, columns=[
                                     'name', 'avg_price'] if expensive_pub_data else [])
 
     if not expensive_pub_df.empty:
-        # Графік 6: Дорогі видавництва (використовуємо порог з StatsRepo)
 
         fig_expensive_pub = px.pie(expensive_pub_df, names='name', values='avg_price',
                                    title="Дорогі видавництва (розподіл за середньою ціною)",
                                    template=template_style,
-                                   hole=0.3)  # Створюємо пончик-графік
+                                   color_discrete_sequence=custom_colors_1[:len(
+                                       expensive_pub_df)],
+                                   hole=0.3)
 
     # --- 4. Статистика продажів по магазинах ---
     stores_data = list(StatsRepo.store_sales_stats())
@@ -315,7 +324,7 @@ def get_dashboard_figures():
         # Графік 7: Сума продажів по магазинах (сортування за сумою)
         stores_sales_df = stores_df.sort_values('total_sales', ascending=False)
         fig_store_sales = px.bar(stores_sales_df, x='name', y='total_sales',
-                                 title="Сума продажів по магазинах",
+
                                  labels={'name': 'Магазин',
                                          'total_sales': 'Сума продажів, грн'},
                                  template=template_style,
@@ -325,13 +334,13 @@ def get_dashboard_figures():
         # Графік 8: Кількість продажів по магазинах (сортування за кількістю)
         stores_count_df = stores_df.sort_values(
             'total_purchases', ascending=False)
-        fig_store_count = px.bar(stores_count_df, x='name', y='total_purchases',
-                                 title="Кількість продажів по магазинах",
-                                 labels={'name': 'Магазин',
-                                         'total_purchases': 'Кількість продажів'},
-                                 template=template_style,
-                                 color='total_purchases',
-                                 color_continuous_scale=px.colors.sequential.Cividis)
+        fig_store_count = px.line(stores_count_df, x='name', y='total_purchases',
+
+                                  labels={'name': 'Магазин',
+                                          'total_purchases': 'Кількість продажів'},
+                                  template=template_style, markers=True)
+        fig_store_count.update_layout(line_chart_layout_updates)
+        fig_store_count.update_traces(line_color='#bc4b51')
 
     return {
         'fig_genres_count': plot(fig_genres_count, output_type='div') if fig_genres_count else "<p>Немає даних</p>",
