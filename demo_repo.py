@@ -105,11 +105,6 @@ def main():
         birth_date=date(1965, 7, 31), death_date=None, country="UK"
     )
 
-    author6 = repo.authors.create(
-        first_name="Leo", last_name="Tolstoy", pseudonym=None,
-        birth_date=date(1828, 9, 9), death_date=date(1910, 11, 20), country="Russia"
-    )
-
     author7 = repo.authors.create(
         first_name="Jane", last_name="Austen", pseudonym=None,
         birth_date=date(1775, 12, 16), death_date=date(1817, 7, 18), country="UK"
@@ -163,11 +158,6 @@ def main():
         isbn="9780747532699", price=Decimal("19.99"), publisher=pub4
     )
 
-    book7 = repo.books.create(
-        name="War and Peace",
-        isbn="9780199232765", price=Decimal("22.00"), publisher=pub5
-    )
-
     book8 = repo.books.create(
         name="Pride and Prejudice",
         isbn="9780141439518", price=Decimal("12.50"), publisher=pub5
@@ -195,7 +185,6 @@ def main():
     book4.author.add(author3)
     book5.author.add(author4)
     book6.author.add(author5)
-    book7.author.add(author6)
     book8.author.add(author7)
     book9.author.add(author8)
     book10.author.add(author9)
@@ -207,7 +196,6 @@ def main():
     genre5 = repo.genres.create(name="Dystopian")
     genre6 = repo.genres.create(name="Fantasy")
     genre7 = repo.genres.create(name="Self-Help")
-    genre8 = repo.genres.create(name="Fantasy")
     genre9 = repo.genres.create(name="Historical")
     genre10 = repo.genres.create(name="Romance")
     genre11 = repo.genres.create(name="Classic Literature")
@@ -217,8 +205,6 @@ def main():
     book3.genres.add(genre1, genre6, genre4)
     book4.genres.add(genre1, genre3, genre5)
     book5.genres.add(genre1, genre3, genre4)
-    book6.genres.add(genre6, genre8)
-    book7.genres.add(genre1, genre9, genre11)
     book8.genres.add(genre1, genre10, genre11)
     book9.genres.add(genre1, genre4, genre11)
     book10.genres.add(genre1, genre3, genre11)
