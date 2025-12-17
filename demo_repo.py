@@ -812,7 +812,7 @@ def main():
     book3.genres.add(genre1, genre6, genre4)
     book4.genres.add(genre1, genre3, genre5)
     book5.genres.add(genre1, genre3, genre4)
-    book6.genres.add(genre6, genre8)                
+    book6.genres.add(genre6, genre8)           
     book7.genres.add(genre1, genre9, genre11)     
     book8.genres.add(genre1, genre10, genre11)     
     book9.genres.add(genre1, genre4, genre11)      

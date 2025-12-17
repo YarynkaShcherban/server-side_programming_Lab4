@@ -7,8 +7,8 @@ from django.http import (
     HttpResponseServerError,
 )
 from store.models import Book, Author, Genre, Publisher
-from .forms import BookForm
-from .ApiManager import *
+from ..forms import BookForm
+from ..ApiManager import *
 from store.repositories.BookRepo import BookRepo
 from store.repositories.GenreRepo import GenreRepo
 from store.repositories.PublisherRepo import PublisherRepo
@@ -17,205 +17,14 @@ from plotly.offline import plot
 import plotly.express as px
 from store.repositories.StatsRepo import StatsRepo
 from django.core.paginator import Paginator
-
+from django.http import JsonResponse
+from store.views.benchmark_service import BenchmarkService
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 book_repo = BookRepo()
 genre_repo = GenreRepo()
 publisher_repo = PublisherRepo()
-
-
-def book_list(request):
-    try:
-        books = book_api.get_all_books()
-        genres = genre_api.get_all_genres()
-        paginator = Paginator(books, 8)
-        page_number = request.GET.get("page")
-        page_obj = paginator.get_page(page_number)
-        context = {
-            "page_obj": page_obj,
-            "books": page_obj.object_list,
-            "genres": genres,
-            "current_genre": None
-        }
-        return render(request, "catalog/list.html", context)
-
-    except Exception as ex:
-        print("Помилка API:", ex)
-        return render(request, "errors/500.html", status=500)
-
-
-def book_list_by_genre(request, genre_id):
-    try:
-        current_genre = genre_api.get_by_id(genre_id)
-        if not current_genre:
-            return render(request, "errors/404.html", status=404)
-        books = book_api.get_books_by_genre(genre_id)
-
-        paginator = Paginator(books, 8) 
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-
-        genres = genre_api.get_all_genres()
-        return render(request, 'catalog/list.html', {
-            'books': page_obj.object_list, 
-            'page_obj': page_obj, 
-            'genres': genres,
-            'current_genre': current_genre
-        })
-    except Exception as ex:
-        print("Помилка API:", ex)
-        return render(request, "errors/500.html", status=500)
-
-
-def book_list_by_publisher(request, publisher_id):
-    try:
-        current_publisher = publisher_api.get_by_id(publisher_id)
-
-        if not current_publisher:
-            return render(request, "errors/404.html", status=404)
-
-        books = book_api.get_books_by_publisher(publisher_id)
-
-        paginator = Paginator(books, 8) 
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-
-        publishers = publisher_api.get_all_publishers()
-
-        return render(request, 'catalog/list.html', {
-            'books': page_obj.object_list, 
-            'page_obj': page_obj, 
-            'publishers': publishers,
-            'current_publisher': current_publisher
-        })
-    except Exception as ex:
-        print("Помилка API:", ex)
-        return render(request, "errors/500.html", status=500)
-    
-def get_book_stats():
-    stats = {
-        "overall": {},
-        "genres": [],
-        "publishers": [],
-    }
-
-    overall = book_api.client.get("catalog/books/stats/overall/")
-    if isinstance(overall, dict) and not overall.get("error"):
-        stats["overall"] = overall
-    else:
-        stats["overall"] = {"avg_price": 0, "total_books": 0}
-
-    genres = genre_api.client.get("catalog/genres/stats/")
-    if isinstance(genres, list):
-        stats["genres"] = genres
-
-    publishers = publisher_api.client.get("catalog/publishers/stats/")
-    if isinstance(publishers, list):
-        stats["publishers"] = publishers
-    return stats
-
-def book_stats(request):
-    try:
-        stats = get_book_stats()
-        try:
-            books = book_api.get_all_books()
-        except Exception as ex_books:
-            print("Помилка завантаження books через API:", ex_books)
-            books = []
-
-        return render(request, "catalog/stats.html", {
-            "stats": stats,
-            "books": books,
-        })
-    except Exception as ex:
-        print("Помилка stats:", ex)
-        return render(request, "errors/500.html", status=500)
-
-
-def book_detail(request, book_id):
-    try:
-        book = None
-        try:
-            book = book_api.get_by_id_with_related(book_id)
-        except Exception as ex_book:
-            print("Помилка завантаження book через API:", ex_book)
-        if not book:
-            return render(request, "errors/404.html", status=404)
-
-        stats = get_book_stats()
-
-        return render(request, "catalog/detail.html", {
-            "book": book,
-            "stats": stats,
-        })
-    except Exception as ex:
-        print("Помилка detail:", ex)
-        return render(request, "errors/400.html", status=400)
-
-
-def book_update(request, book_id):
-    try:
-        book = book_repo.get_by_id(book_id)
-        if not book:
-            return render(request, "errors/404.html", status=404)
-
-        if request.method == "POST":
-            form = BookForm(request.POST, request.FILES, instance=book)
-            if form.is_valid():
-                form.save()
-                return redirect("catalog:book_detail", book_id=book_id)
-            return render(request, "errors/400.html", status=400)
-        form = BookForm(instance=book)
-        return render(request, "catalog/form.html", {"form": form})
-    except Exception as ex:
-        print("Помилка update:", ex)
-        return render(request, "errors/500.html", status=500)
-
-
-def book_create(request):
-    response = None
-    try:
-        if request.method == "POST":
-            form = BookForm(request.POST, request.FILES)
-            if form.is_valid():
-                data = form.cleaned_data
-
-                data['authors'] = [a.author_id for a in data.pop('author', [])]
-                data['genres'] = [g.genre_id for g in data.pop('genres', [])]
-                data['publisher'] = data['publisher'].publisher_id
-
-                image_file = request.FILES.get("image")
-                response = book_api.create(
-                    data=data,
-                    image_file=image_file
-                )
-                print("API create response:", response) 
-                if response and response.get("book_id"):
-                    return redirect("catalog:book_list")
-                else:
-                    return render(request, "errors/400.html", {"response": response}, status=400)
-
-        form = BookForm()
-        return render(request, "catalog/form.html", {"form": form})
-    except Exception as ex:
-        print("Помилка create:", ex)
-        return render(request, "errors/500.html", status=500)
-
-
-def book_delete(request, book_id):
-    try:
-        book = book_api.get_by_id(book_id)
-        if not book:
-            return render(request, "errors/404.html", status=404)
-        if request.method != "POST":
-            return render(request, "catalog/delete.html", {"book": book})
-        ok = book_api.delete(book_id=book_id)
-        if ok:
-            return redirect("catalog:book_list")
-    except Exception as ex:
-        print("Помилка API:", ex)
-        return render(request, "errors/500.html", status=500)
-
 
 def get_dashboard_figures():
     template_style = 'plotly_white'
@@ -359,6 +168,74 @@ def get_dashboard_figures():
     }
 
 
+def benchmark_view(request):
+    try:
+        df_200 = BenchmarkService.get_benchmark_data(n_requests=200)
+        opt_200 = df_200.loc[df_200['total_time'].idxmin()]
+        fig_200 = px.line(df_200, x='threads', y='total_time', title="Результати для 200 запитів",
+                         markers=True, template='plotly_white')
+        graph_200 = plot(fig_200, output_type='div')
+
+        df_500 = BenchmarkService.get_benchmark_data(n_requests=500)
+        opt_500 = df_500.loc[df_500['total_time'].idxmin()]
+        fig_500 = px.line(df_500, x='threads', y='total_time', title="Результати для 500 запитів",
+                         markers=True, template='plotly_white')
+        fig_500.update_traces(line_color='#ef476f')
+        graph_500 = plot(fig_500, output_type='div')
+
+        df_10000 = BenchmarkService.get_benchmark_data(n_requests=10000)
+        opt_10000 = df_10000.loc[df_10000['total_time'].idxmin()]
+        fig_10000 = px.line(df_10000, x='threads', y='total_time', title="Навантаження: 10 000 запитів",
+                           markers=True, template='plotly_white', color_discrete_sequence=['#8B5CF6'])
+        graph_10000 = plot(fig_10000, output_type='div')
+
+        def get_segment_avg(chunk_ids):
+            return Book.objects.filter(book_id__in=chunk_ids).aggregate(Avg('price'))['price__avg'] or 0
+
+        all_ids = list(Book.objects.values_list('book_id', flat=True))
+        test_threads = [1, 2, 4, 8, 16, 32, 64, 128, 256] 
+        async_results = []
+
+        for n in test_threads:
+            chunk_size = max(1, len(all_ids) // n)
+            chunks = [all_ids[i:i + chunk_size] for i in range(0, len(all_ids), chunk_size)]
+            start_time = time.time()
+            with ThreadPoolExecutor(max_workers=n) as executor:
+                list(executor.map(get_segment_avg, chunks))
+            async_results.append({'threads': n, 'execution_time': time.time() - start_time})
+
+        df_async = pd.DataFrame(async_results)
+        idx_min = df_async['execution_time'].idxmin()
+        fig_async = px.line(
+            df_async, 
+            x='threads', 
+            y='execution_time', 
+            title="Вплив кількості потоків на час обробки",
+            labels={'threads': 'Кількість потоків', 'execution_time': 'Час виконання (сек)'},
+            markers=True, 
+            template='plotly_white'
+        )
+        fig_async.update_traces(line_color='#00CC96')
+
+        return render(request, 'catalog/benchmark.html', {
+            'graph_200': graph_200,
+            'graph_500': graph_500,
+            'graph_10000': graph_10000,
+            'opt_200': {'threads': int(opt_200['threads']), 'time': round(opt_200['total_time'], 4)},
+            'opt_500': {'threads': int(opt_500['threads']), 'time': round(opt_500['total_time'], 4)},
+            'opt_10000': {'threads': int(opt_10000['threads']), 'time': round(opt_10000['total_time'], 4)},
+            'table_200': df_200.to_dict('records'),
+            'table_500': df_500.to_dict('records'),
+            'table_10000': df_10000.to_dict('records'),
+            'graph_div': plot(fig_async, output_type='div'),
+            'table_data': df_async.to_dict('records'),
+            'optimal_threads': int(df_async.loc[idx_min]['threads']),
+            'min_time': round(df_async.loc[idx_min]['execution_time'], 4)
+        })
+    except Exception as e:
+        return render(request, "errors/500.html", {"error": str(e)}, status=500)
+    
+
 def dashboard_page(request):
     try:
         context = get_dashboard_figures()
@@ -366,8 +243,7 @@ def dashboard_page(request):
     except Exception as e:
         print(e)
         return render(request, 'catalog/error.html', status=500)
-
-
+    
 @api_view(['GET'])
 def dashboard_view(request):
     figures = get_dashboard_figures()
@@ -396,17 +272,3 @@ def expensive_publishers_api(request):
 @api_view(['GET'])
 def store_sales_api(request):
     return Response(list(StatsRepo.store_sales_stats()))
-
-
-
-def error_404(request, exception):
-    return render(request, "errors/404.html", status=404)
-
-def error_500(request):
-    return render(request, "errors/500.html", status=500)
-
-def error_403(request, exception):
-    return render(request, "errors/403.html", status=403)
-
-def error_400(request, exception):
-    return render(request, "errors/400.html", status=400)
