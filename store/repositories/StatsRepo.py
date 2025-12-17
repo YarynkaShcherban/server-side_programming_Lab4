@@ -1,4 +1,5 @@
-from django.db.models import Avg, Count, Sum
+from django.db.models import Avg, Count, Sum, F
+from store import models
 from store.models import Book, Author, Publisher, Genre, Store, Purchase, PurchaseDetail
 
 
@@ -42,3 +43,19 @@ class StatsRepo:
             total_sales=Sum('purchase__total_amount'),
             total_purchases=Count('purchase', distinct=True)
         ).values('name', 'total_sales', 'total_purchases')
+
+    @staticmethod
+    def avg_price_by_genre_and_store():
+        return (
+            Genre.objects
+            .values(
+                genre_name=F('name'),
+                store_name=F(
+                    'book__purchasedetail__purchase__store__name'
+                )
+            )
+            .annotate(
+                avg_price=Avg('book__purchasedetail__price_at_purchase')
+            )
+            .order_by('genre_name', 'store_name')
+        )

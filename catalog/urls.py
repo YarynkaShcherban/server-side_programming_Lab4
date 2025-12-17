@@ -30,4 +30,6 @@ urlpatterns = [
     path('stats/store_sales/', views.store_sales_api, name='store_sales_api'),
     path('dashboard/page/', views.dashboard_page, name='dashboard_page'),
     path('dashboard/api/', views.dashboard_view, name='dashboard_api'),
+    path('avg-price-by-genre-store/', views.avg_price_by_genre_store,
+         name='avg_price_by_genre_store'),
 ]

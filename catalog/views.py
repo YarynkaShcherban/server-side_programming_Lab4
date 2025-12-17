@@ -17,6 +17,7 @@ from plotly.offline import plot
 import plotly.express as px
 from store.repositories.StatsRepo import StatsRepo
 from django.core.paginator import Paginator
+from django.http import JsonResponse
 
 book_repo = BookRepo()
 genre_repo = GenreRepo()
@@ -199,6 +200,50 @@ def book_delete(request, book_id):
     except Exception as ex:
         print("Помилка API:", ex)
         return render(request, "errors/500.html", status=500)
+
+
+def avg_price_by_genre_store(request):
+    genre = request.GET.get("genre", "")
+
+    data_queryset = list(StatsRepo.avg_price_by_genre_and_store())
+    df = pd.DataFrame(data_queryset)
+
+    available_genres = df['genre_name'].unique(
+    ).tolist() if not df.empty else []
+
+    if not genre and available_genres:
+        genre = available_genres[0]
+
+    if genre and genre in available_genres:
+        filtered_df = df[df['genre_name'] == genre]
+    else:
+        filtered_df = pd.DataFrame()
+
+    if not filtered_df.empty:
+        filtered_df = filtered_df.sort_values('avg_price', ascending=False)
+        fig = px.line(
+            filtered_df,
+            x='store_name',
+            y='avg_price',
+            markers=True,
+            labels={'store_name': 'Магазин', 'avg_price': 'Середня ціна, грн'},
+            template='plotly_white'
+        )
+        fig.update_layout(
+            xaxis={'categoryorder': 'total descending', 'tickangle': 20},
+            yaxis={'rangemode': 'tozero'}
+        )
+        fig.update_traces(line_color='#f4a259')
+
+        graph_json = fig.to_json()
+    else:
+        graph_json = "{}"
+
+    return JsonResponse({
+        'graph_json': graph_json,
+        'available_genres': available_genres,
+        'current_genre': genre
+    })
 
 
 def get_dashboard_figures():

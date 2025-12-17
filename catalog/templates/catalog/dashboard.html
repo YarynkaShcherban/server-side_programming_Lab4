@@ -1,37 +1,109 @@
 {% extends "catalog/base.html" %}
 {% block content %}
+
 <h1>Аналітичний дашборд</h1>
 
 <div>
     <h2>Кількість книг по жанрах</h2>
     {{ fig_genres_count|safe }}
 </div>
+
 <div>
     <h2>Середня ціна книг по жанрах</h2>
     {{ fig_genres_price|safe }}
 </div>
+
 <div>
     <h2>Середня ціна книг по авторах</h2>
     {{ fig_authors_price|safe }}
 </div>
+
 <div>
-    <h2>Топ авторів за кількістю книг</h2>
+    <h2>Топ авторів</h2>
     {{ fig_top_authors|safe }}
 </div>
+
 <div>
-    <h2>Середня ціна книг по видавництвах</h2>
+    <h2>Середня ціна по видавництвах</h2>
     {{ fig_publishers_price|safe }}
 </div>
+
 <div>
     <h2>Дорогі видавництва</h2>
     {{ fig_expensive_pub|safe }}
 </div>
+
 <div>
-    <h2>Сума продажів по магазинах</h2>
+    <h2>Продажі по магазинах</h2>
     {{ fig_store_sales|safe }}
 </div>
+
 <div>
     <h2>Кількість продажів по магазинах</h2>
     {{ fig_store_count|safe }}
+</div>
+
+<div>
+    <h2>Порівняння середніх цін на певний жанр у мережі магазинів</h2>
+    <div style="margin-bottom: 20px;">
+        <label for="genre-select" style="font-weight: bold; margin-right: 10px;">Оберіть жанр:</label>
+        <select id="genre-select" style="width: 300px; padding: 5px;">
+            <option value="">---Оберіть---</option>
+        </select>
+    </div>
+
+    <div id="interactive-graph-container" style="min-height: 400px;">
+        <p>Завантаження графіку...</p>
+    </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const genreSelect = document.getElementById('genre-select');
+        const graphContainer = document.getElementById('interactive-graph-container');
+
+        // Function to load and update graph
+        function updateGraph(genre = '') {
+            fetch(`/api/catalog/avg-price-by-genre-store/?genre=${encodeURIComponent(genre)}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Update genre dropdown if not already populated
+                    if (genreSelect.options.length <= 1) {
+                        genreSelect.innerHTML = '';
+                        data.available_genres.forEach(g => {
+                            const option = document.createElement('option');
+                            option.value = g;
+                            option.textContent = g;
+                            if (g === data.current_genre) {
+                                option.selected = true;
+                            }
+                            genreSelect.appendChild(option);
+                        });
+                    }
+
+                    // Update graph
+                    if (data.graph_json && data.graph_json !== '{}') {
+                        const graphData = JSON.parse(data.graph_json);
+                        Plotly.newPlot(graphContainer, graphData.data, graphData.layout, { responsive: true });
+                    } else {
+                        graphContainer.innerHTML = '<p>Немає даних для відображення</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading graph:', error);
+                    graphContainer.innerHTML = '<p>Помилка завантаження графіку</p>';
+                });
+        }
+
+        // Load initial graph
+        updateGraph();
+
+        // Update graph when genre changes
+        genreSelect.addEventListener('change', function () {
+            updateGraph(this.value);
+        });
+    });
+</script>
 </div>
 {% endblock %}
