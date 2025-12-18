@@ -73,16 +73,6 @@ class BookApiManager:
             }
         return self.client.post("books/", data=data, files=files)
 
-# не треба вже. Через репо апдейти відбуваються
-    # def update(self, book_id: int, data: Dict[str, Any], image_file=None):
-    #     files = None
-    #     if image_file:
-    #         image_file.seek(0)
-    #         files = {
-    #             "image": (image_file.name, image_file.read(), image_file.content_type)
-    #         }
-    #     return self.client.put(f"books/{book_id}/", data=data, files=files)
-
     def delete(self, book_id: int):
         response = self.client.delete(f"books/{book_id}/")
         if 200 <= response.status_code <= 299:
