@@ -19,7 +19,7 @@ if not settings.DEBUG:
         }),
     ]
 
-handler404 = "catalog.views.error_404"
-handler500 = "catalog.views.error_500"
-handler403 = "catalog.views.error_403"
-handler400 = "catalog.views.error_400"
+handler400 = 'catalog.views.Book.error_400'
+handler403 = 'catalog.views.Book.error_403'
+handler404 = 'catalog.views.Book.error_404'
+handler500 = 'catalog.views.Book.error_500'
